@@ -13,17 +13,20 @@ export function buildFlowNodes(normalizedProgram, trace = []) {
         variableChips: [],
       },
     },
-    ...normalizedProgram.statements.map((statement) => {
-      const matchingStep = trace.find((step) => step.nodeId === statement.id);
+    ...trace.map((step) => {
       return {
-        id: statement.id,
+        id: step.nodeId,
         type: "traceNode",
         data: {
-          label: statement.trimmed,
-          kind: statement.type,
-          description: `Line ${statement.lineNumber}`,
-          lineNumber: statement.lineNumber,
-          variableChips: matchingStep ? Object.keys(matchingStep.changedVariables || {}) : [],
+          label: step.title,
+          kind: step.kind,
+          description: `Line ${step.lineNumber}`,
+          lineNumber: step.lineNumber,
+          variableChips: Object.keys(step.changedVariables || {}),
+          previousVariables: step.previousVariables,
+          afterVariables: step.variables,
+          reason: step.branchReason,
+          nextReason: step.next,
         },
       };
     }),
@@ -34,7 +37,7 @@ export function buildFlowNodes(normalizedProgram, trace = []) {
         label: "End",
         kind: "end",
         description: "Execution is complete.",
-        lineNumber: normalizedProgram.statements.at(-1)?.lineNumber || 0,
+        lineNumber: trace.at(-1)?.lineNumber || normalizedProgram.lines.at(-1)?.lineNumber || 0,
         variableChips: [],
       },
     },

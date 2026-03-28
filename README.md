@@ -29,11 +29,13 @@ LogicLens addresses that gap by turning structured beginner Java programs into a
 - MongoDB persistence for users, saved traces, favorites, and program library
 - Seedable sample program library covering 5 learning categories
 - TraceWise AI analysis endpoints for detect, explain, and final summary
+- Rule-based preprocessing, parsing, normalization, and simulation for beginner Java code
 - Interactive React Flow graph with custom nodes, active glow, visited state, and branch labels
 - Step timeline, autoplay, reset, and node details drawer
 - Learning Mode vs Demo Mode toggle
 - Admin program management and simple usage overview
 - Responsive layouts for desktop, tablet, and mobile
+- Automated backend tests for auth validation and execution engine behavior
 
 ## Tech Stack
 
@@ -98,6 +100,12 @@ npm run dev:server
 
 ```bash
 npm run dev:client
+```
+
+7. Run the backend test suite:
+
+```bash
+npm run test
 ```
 
 ## Environment Variables
@@ -187,3 +195,4 @@ Student accounts are created through the signup page.
 - The tracer is intentionally scoped to beginner-friendly structured Java programs.
 - Unsupported constructs return a support-level response instead of pretending to fully simulate advanced Java.
 - The most polished demo flows are Even/Odd, Greatest of 3 Numbers, Factorial, Sum of n Natural Numbers, Multiplication Table, Prime Number, Palindrome Number, Fibonacci Series, Right Triangle Star Pattern, and Pyramid.
+- When MongoDB is unavailable locally, LogicLens falls back to demo mode so auth and tracing still work for hackathon demos.

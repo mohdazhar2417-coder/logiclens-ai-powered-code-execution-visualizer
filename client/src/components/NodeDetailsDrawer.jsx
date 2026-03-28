@@ -12,6 +12,9 @@ function NodeDetailsDrawer({ node, step }) {
             <p><span className="font-semibold text-white">Line:</span> {step.lineNumber}</p>
             <p><span className="font-semibold text-white">Step:</span> {step.stepIndex + 1}</p>
             <p><span className="font-semibold text-white">Reason:</span> {step.branchReason || "Sequential execution."}</p>
+            <p><span className="font-semibold text-white">Before:</span> {JSON.stringify(step.previousVariables || {})}</p>
+            <p><span className="font-semibold text-white">After:</span> {JSON.stringify(step.variables || {})}</p>
+            <p><span className="font-semibold text-white">Next step:</span> {step.next || "Continue execution."}</p>
           </>
         )}
       </div>

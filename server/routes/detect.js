@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { detect } from "../controllers/analysisController.js";
+import { validateRequest } from "../middleware/validateRequest.js";
 
 const router = Router();
 
-router.post("/", detect);
+router.post("/", validateRequest([{ field: "code", type: "string", required: true, minLength: 4 }]), detect);
 
 export default router;

@@ -4,7 +4,7 @@ import { isDemoMode } from "../config/runtime.js";
 import { demoStore } from "../data/demoStore.js";
 
 export async function createTrace(req, res) {
-  const { title, category, subtype, code, customInputs, traceSummary, finalOutput } = req.body;
+  const { title, category, subtype, code, customInputs, traceSummary, finalOutput, supportLevel, confidence } = req.body;
 
   if (!title || !code) {
     return res.status(400).json({ message: "Trace title and code are required." });
@@ -19,6 +19,8 @@ export async function createTrace(req, res) {
         code,
         customInputs: customInputs || {},
         traceSummary: traceSummary || {},
+        supportLevel: supportLevel || "full",
+        confidence: confidence || 0,
         finalOutput: finalOutput || "",
       })
     : await SavedTrace.create({
@@ -29,6 +31,8 @@ export async function createTrace(req, res) {
         code,
         customInputs: customInputs || {},
         traceSummary: traceSummary || {},
+        supportLevel: supportLevel || "full",
+        confidence: confidence || 0,
         finalOutput: finalOutput || "",
       });
 

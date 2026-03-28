@@ -4,567 +4,621 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function numberValue(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function diffVariables(before, after) {
+  const changed = {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+
+  keys.forEach((key) => {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      changed[key] = after[key];
+    }
+  });
+
+  return changed;
 }
 
-function buildStep({
-  steps,
-  nodeId,
-  lineNumber,
-  title,
-  variables,
-  previousVariables,
-  changedVariables = {},
-  output,
-  branchReason = "",
-  kind = "process",
-  branchLabel = "",
-  next = "",
-  commonMistake = "",
-}) {
-  const step = {
-    id: `step-${steps.length + 1}`,
-    stepIndex: steps.length,
-    nodeId,
-    lineNumber,
-    title,
-    kind,
-    branchLabel,
-    branchReason,
-    next,
-    commonMistake,
-    variables: clone(variables),
-    previousVariables: clone(previousVariables),
-    changedVariables: clone(changedVariables),
-    outputSnapshot: output.join("\n"),
-  };
-
-  step.teacherMode = explainStep(step, title);
-  step.explanation = step.teacherMode.whatHappened;
-  steps.push(step);
+function normalizeStringLiteral(value) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
-function createRecorder(state, steps) {
-  return (config) => {
-    state.variableHistory.push({
-      stepIndex: steps.length,
-      variables: clone(state.variables),
+function toRuntimeLiteral(value) {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (value === undefined || value === null) {
+    return "0";
+  }
+  return String(value);
+}
+
+function resolveInputValue(name, type, customInputs) {
+  const raw = customInputs?.[name];
+  if (raw === undefined) {
+    if (type === "String") return "";
+    if (type === "char") return "a";
+    if (type === "boolean") return false;
+    return 0;
+  }
+
+  if (type === "String") return String(raw);
+  if (type === "char") return String(raw)[0] || "a";
+  if (type === "boolean") return raw === true || String(raw).toLowerCase() === "true";
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function evaluateExpression(expression, runtime) {
+  const expr = expression?.trim() || "";
+  if (!expr) {
+    return undefined;
+  }
+
+  if (/^new\s+Scanner\s*\(/.test(expr)) {
+    return { kind: "scanner" };
+  }
+
+  if (/^\w+\.next(Int|Double|Float|Long)\(\)$/.test(expr)) {
+    const inputName = runtime.currentInputTarget || "value";
+    return resolveInputValue(inputName, runtime.currentInputType || "int", runtime.customInputs);
+  }
+
+  if (/^\w+\.nextLine\(\)$/.test(expr)) {
+    const inputName = runtime.currentInputTarget || "text";
+    return resolveInputValue(inputName, "String", runtime.customInputs);
+  }
+
+  if (/^".*"$|^'.*'$/.test(expr)) {
+    return normalizeStringLiteral(expr);
+  }
+
+  const reservedWords = new Set([
+    "true",
+    "false",
+    "Math",
+    "floor",
+    "ceil",
+    "abs",
+    "pow",
+    "min",
+    "max",
+  ]);
+
+  const translated = expr
+    .replace(/\btrue\b/g, "true")
+    .replace(/\bfalse\b/g, "false")
+    .replace(/&&/g, "&&")
+    .replace(/\|\|/g, "||")
+    .replace(/!=/g, "!==")
+    .replace(/==/g, "===")
+    .replace(/\b([A-Za-z_]\w*)\b/g, (token) => {
+      if (reservedWords.has(token)) {
+        return token;
+      }
+      if (Object.prototype.hasOwnProperty.call(runtime.variables, token)) {
+        return toRuntimeLiteral(runtime.variables[token]);
+      }
+      return token;
     });
 
-    buildStep({
-      steps,
-      variables: state.variables,
-      previousVariables: config.previousVariables || {},
-      output: state.output,
-      ...config,
-    });
-  };
+  try {
+    return Function(`return (${translated});`)();
+  } catch {
+    return expr;
+  }
 }
 
-function simulateFallback(normalizedProgram) {
-  const steps = [];
-  const state = {
-    variables: {},
-    variableHistory: [],
-    output: [],
-  };
-  const record = createRecorder(state, steps);
+function evaluateOutput(expression, runtime) {
+  if (!/["']/.test(expression)) {
+    const direct = evaluateExpression(expression, runtime);
+    return direct === undefined || direct === null ? "" : String(direct);
+  }
 
-  normalizedProgram.statements.forEach((statement) => {
-    const previousVariables = clone(state.variables);
-    const changedVariables = {};
+  const parts = [];
+  let buffer = "";
+  let depth = 0;
+  let inString = false;
+  let stringChar = "";
 
-    if (statement.type === "declaration") {
-      const match = statement.trimmed.match(/(int|double|float|long|String|char|boolean)\s+(\w+)(?:\s*=\s*([^;]+))?/);
-      if (match) {
-        const [, , name, rawValue] = match;
-        state.variables[name] = rawValue ? rawValue.replace(/["';]/g, "").trim() : 0;
-        changedVariables[name] = state.variables[name];
+  for (let index = 0; index < expression.length; index += 1) {
+    const char = expression[index];
+    if ((char === '"' || char === "'") && expression[index - 1] !== "\\") {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (stringChar === char) {
+        inString = false;
+        stringChar = "";
       }
     }
 
-    if (statement.type === "assignment") {
-      const match = statement.trimmed.match(/(\w+)\s*=\s*([^;]+)/);
-      if (match) {
-        const [, name, expression] = match;
-        const numericExpression = expression.replace(/\b(\w+)\b/g, (token) =>
-          Object.prototype.hasOwnProperty.call(state.variables, token) ? state.variables[token] : token,
-        );
-        try {
-          const result = Function(`return (${numericExpression});`)();
-          state.variables[name] = result;
-          changedVariables[name] = result;
-        } catch {
-          state.variables[name] = expression.trim();
-          changedVariables[name] = expression.trim();
-        }
-      }
+    if (!inString) {
+      if (char === "(") depth += 1;
+      if (char === ")") depth -= 1;
     }
 
-    if (statement.type === "output") {
-      const printMatch = statement.trimmed.match(/print(?:ln)?\((.+)\)/);
-      if (printMatch) {
-        const rendered = printMatch[1]
-          .replace(/["']/g, "")
-          .replace(/\b(\w+)\b/g, (token) =>
-            Object.prototype.hasOwnProperty.call(state.variables, token) ? state.variables[token] : token,
-          );
-        state.output.push(rendered);
-      }
+    if (!inString && depth === 0 && char === "+") {
+      parts.push(buffer.trim());
+      buffer = "";
+      continue;
     }
 
-    record({
-      nodeId: statement.id,
-      lineNumber: statement.lineNumber,
-      title: statement.trimmed,
+    buffer += char;
+  }
+
+  if (buffer.trim()) {
+    parts.push(buffer.trim());
+  }
+
+  return parts
+    .map((part) => evaluateExpression(part, runtime))
+    .map((value) => (value === undefined || value === null ? "" : String(value)))
+    .join("");
+}
+
+function appendOutput(runtime, text, newline) {
+  runtime.outputText += text;
+  if (newline) {
+    runtime.outputText += "\n";
+  }
+}
+
+function createStepRecorder(runtime) {
+  return function record(statement, config) {
+    const previousVariables = clone(runtime.variables);
+
+    if (typeof config.apply === "function") {
+      config.apply();
+    }
+
+    const afterVariables = clone(runtime.variables);
+    const changedVariables = diffVariables(previousVariables, afterVariables);
+    const step = {
+      id: `step-${runtime.steps.length + 1}`,
+      nodeId: `step-${runtime.steps.length + 1}`,
+      statementId: statement.id,
+      lineNumber: config.lineNumber || statement.lineNumber,
+      stepIndex: runtime.steps.length,
+      title: config.title || statement.raw || statement.type,
+      kind: config.kind || statement.type,
+      branchLabel: config.branchLabel || "",
+      branchReason: config.branchReason || "",
+      next: config.next || "Continue to the next executable statement.",
+      commonMistake: config.commonMistake || "",
       previousVariables,
+      variables: afterVariables,
       changedVariables,
-      kind: statement.type,
-      next: "Continue to the next beginner-friendly statement.",
-    });
-  });
+      outputSnapshot: runtime.outputText.replace(/\n$/, ""),
+      metadata: config.metadata || {},
+    };
 
-  return {
-    steps,
-    variables: state.variables,
-    previousVariables: steps.at(-2)?.variables || {},
-    changedVariables: steps.at(-1)?.changedVariables || {},
-    variableHistory: state.variableHistory,
-    output: state.output,
-    branchDecisions: [],
-    loopIterationCounts: {},
+    step.teacherMode = explainStep(step, step.kind);
+    step.explanation = step.teacherMode.whatHappened;
+    runtime.steps.push(step);
+    runtime.variableHistory.push({
+      stepIndex: step.stepIndex,
+      variables: afterVariables,
+    });
+    return step;
   };
 }
 
-function simulateDemoPrograms(normalizedProgram) {
-  const subtype = normalizedProgram.subtype;
-  const inputs = normalizedProgram.customInputs || {};
-  const steps = [];
-  const state = {
-    variables: {},
-    variableHistory: [],
-    output: [],
-    branchDecisions: [],
-    loopIterationCounts: {},
-  };
-  const record = createRecorder(state, steps);
-  const finish = () => ({
-    ...state,
-    steps,
-    previousVariables: steps.at(-2)?.variables || {},
-    changedVariables: steps.at(-1)?.changedVariables || {},
+function executeDeclaration(statement, runtime, record) {
+  const declared = [];
+
+  record(statement, {
+    title: statement.raw,
+    kind: "declaration",
+    apply() {
+      statement.declarators.forEach((declarator) => {
+        runtime.currentInputTarget = declarator.name;
+        runtime.currentInputType = statement.valueType;
+        let value;
+
+        runtime.variableTypes[declarator.name] = statement.valueType;
+
+        if (statement.valueType === "Scanner") {
+          value = { kind: "scanner" };
+        } else if (!declarator.initializer) {
+          value = resolveInputValue(declarator.name, statement.valueType, runtime.customInputs);
+        } else {
+          value = evaluateExpression(declarator.initializer, runtime);
+        }
+
+        runtime.variables[declarator.name] = value;
+        declared.push(declarator.name);
+      });
+    },
+    next: "The declared variables are ready for later statements.",
+    branchReason: declared.length ? `Declared ${declared.join(", ")} in the current scope.` : "",
+  });
+}
+
+function executeAssignment(statement, runtime, record) {
+  record(statement, {
+    title: statement.raw,
+    kind: "assignment",
+    apply() {
+      runtime.currentInputTarget = statement.target;
+      runtime.currentInputType = runtime.variableTypes[statement.target] || "int";
+      const current = runtime.variables[statement.target];
+      const value = evaluateExpression(statement.expression, runtime);
+
+      switch (statement.operator) {
+        case "=":
+          runtime.variables[statement.target] = value;
+          break;
+        case "+=":
+          runtime.variables[statement.target] = current + value;
+          break;
+        case "-=":
+          runtime.variables[statement.target] = current - value;
+          break;
+        case "*=":
+          runtime.variables[statement.target] = current * value;
+          break;
+        case "/=":
+          runtime.variables[statement.target] = current / value;
+          break;
+        case "%=":
+          runtime.variables[statement.target] = current % value;
+          break;
+        default:
+          runtime.variables[statement.target] = value;
+      }
+    },
+    next: "Use the updated variable value in the next step.",
+  });
+}
+
+function executeUpdate(statement, runtime, record) {
+  const expression = statement.expression;
+  record(statement, {
+    title: expression,
+    kind: "update",
+    apply() {
+      const postfix = expression.match(/^(\w+)(\+\+|--)$/);
+      const prefix = expression.match(/^(\+\+|--)(\w+)$/);
+      const variableName = postfix?.[1] || prefix?.[2];
+      const operator = postfix?.[2] || prefix?.[1];
+      const current = Number(runtime.variables[variableName] || 0);
+      runtime.variables[variableName] = operator === "++" ? current + 1 : current - 1;
+    },
+    next: "The loop or next statement will use the incremented value.",
+  });
+}
+
+function executeOutput(statement, runtime, record) {
+  record(statement, {
+    title: statement.raw,
+    kind: "output",
+    apply() {
+      const rendered = evaluateOutput(statement.expression, runtime);
+      appendOutput(runtime, rendered, statement.mode === "println");
+    },
+    next: "The output panel updates immediately after this print step.",
+  });
+}
+
+function executeIf(statement, runtime, record, executeStatements) {
+  for (const branch of statement.branches) {
+    const branchLabel = branch.kind === "else" ? "else" : branch.kind;
+    const passed = branch.kind === "else" ? true : Boolean(evaluateExpression(branch.condition, runtime));
+
+    record(statement, {
+      title: branch.kind === "else" ? "Else branch selected" : `${branch.kind} (${branch.condition})`,
+      lineNumber: branch.lineNumber,
+      kind: "decision",
+      branchLabel: passed ? "yes" : "no",
+      branchReason:
+        branch.kind === "else"
+          ? "All previous conditions were false, so the else block runs."
+          : `The condition ${branch.condition} evaluated to ${passed}.`,
+      metadata: {
+        branch: branchLabel,
+      },
+      next: passed ? "Execute the chosen branch body." : "Check the next branch in the chain.",
+    });
+
+    runtime.branchDecisions.push({
+      lineNumber: branch.lineNumber,
+      result: passed,
+      reason: branch.kind === "else" ? "Fallback branch selected." : `${branch.condition} -> ${passed}`,
+    });
+
+    if (passed) {
+      executeStatements(branch.body, runtime);
+      return;
+    }
+  }
+}
+
+function executeWhile(statement, runtime, record, executeStatements) {
+  let iteration = 0;
+  runtime.loopIterationCounts[statement.id] = 0;
+
+  while (true) {
+    const passed = Boolean(evaluateExpression(statement.condition, runtime));
+    record(statement, {
+      title: `while (${statement.condition})`,
+      kind: "loop-condition",
+      branchLabel: passed ? "repeat" : "exit",
+      branchReason: `The while condition evaluated to ${passed}.`,
+      next: passed ? "Enter the loop body." : "Exit the loop and continue.",
+      metadata: { iteration },
+    });
+
+    if (!passed) {
+      break;
+    }
+
+    iteration += 1;
+    runtime.loopIterationCounts[statement.id] += 1;
+    const control = executeStatements(statement.body, runtime);
+    if (control?.break) {
+      break;
+    }
+  }
+}
+
+function executeFor(statement, runtime, record, executeStatements, createSyntheticStatement) {
+  runtime.loopIterationCounts[statement.id] = 0;
+
+  if (statement.init) {
+    const initStatement = createSyntheticStatement(statement.init, statement.lineNumber);
+    executeSingleStatement(initStatement, runtime, record, executeStatements, createSyntheticStatement);
+  }
+
+  let iteration = 0;
+  while (true) {
+    const condition = statement.condition || "true";
+    const passed = Boolean(evaluateExpression(condition, runtime));
+    record(statement, {
+      title: `for condition (${condition})`,
+      kind: "loop-condition",
+      branchLabel: passed ? "repeat" : "exit",
+      branchReason: `The for-loop condition evaluated to ${passed}.`,
+      next: passed ? "Run the loop body." : "Exit the loop.",
+      metadata: { iteration },
+    });
+
+    if (!passed) {
+      break;
+    }
+
+    iteration += 1;
+    runtime.loopIterationCounts[statement.id] += 1;
+    const control = executeStatements(statement.body, runtime);
+    if (control?.break) {
+      break;
+    }
+
+    if (statement.update) {
+      const updateStatement = createSyntheticStatement(statement.update, statement.lineNumber);
+      executeSingleStatement(updateStatement, runtime, record, executeStatements, createSyntheticStatement);
+    }
+  }
+}
+
+function executeSwitch(statement, runtime, record, executeStatements) {
+  const switchValue = evaluateExpression(statement.expression, runtime);
+  record(statement, {
+    title: `switch (${statement.expression})`,
+    kind: "decision",
+    branchReason: `The switch expression evaluated to ${switchValue}.`,
+    next: "Match the expression against the available cases.",
   });
 
-  if (subtype === "Even or Odd") {
-    const num = numberValue(inputs.num ?? inputs.n ?? 8, 8);
-    state.variables.num = num;
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Read the number to test",
-      changedVariables: { num },
-      kind: "input",
-      next: "Check the remainder after division by 2.",
-    });
+  const matchedCase =
+    statement.cases.find((caseEntry) => !caseEntry.isDefault && evaluateExpression(caseEntry.label, runtime) === switchValue) ||
+    statement.cases.find((caseEntry) => caseEntry.isDefault) ||
+    null;
 
-    const previousVariables = clone(state.variables);
-    state.variables.remainder = num % 2;
-    record({
-      nodeId: "line-2",
-      lineNumber: 2,
-      title: "Compute num % 2",
-      previousVariables,
-      changedVariables: { remainder: state.variables.remainder },
-      next: "Use the remainder to choose the branch.",
-    });
-
-    const branch = state.variables.remainder === 0 ? "even" : "odd";
-    state.branchDecisions.push({
-      nodeId: "line-3",
-      result: branch,
-      reason: `Because ${num} % 2 = ${state.variables.remainder}.`,
-    });
-    state.output.push(branch === "even" ? `${num} is even` : `${num} is odd`);
-    record({
-      nodeId: "line-3",
-      lineNumber: 3,
-      title: "Choose the even or odd branch",
-      previousVariables: clone(state.variables),
-      changedVariables: {},
-      branchReason: `Because ${num} % 2 = ${state.variables.remainder}, the ${branch} branch runs.`,
-      branchLabel: branch === "even" ? "Yes" : "No",
-      kind: "decision",
-      next: "Print the final classification.",
-    });
-    return finish();
+  if (!matchedCase) {
+    return;
   }
 
-  if (subtype === "Greatest of 3 numbers") {
-    state.variables.a = numberValue(inputs.a ?? 12, 12);
-    state.variables.b = numberValue(inputs.b ?? 7, 7);
-    state.variables.c = numberValue(inputs.c ?? 18, 18);
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Capture the three candidate values",
-      changedVariables: { a: state.variables.a, b: state.variables.b, c: state.variables.c },
-      kind: "input",
-      next: "Compare the values branch by branch.",
-    });
+  runtime.branchDecisions.push({
+    lineNumber: matchedCase.lineNumber,
+    result: matchedCase.isDefault ? "default" : matchedCase.label,
+    reason: matchedCase.isDefault ? "No explicit case matched, so default ran." : `Matched case ${matchedCase.label}.`,
+  });
 
-    const previousVariables = clone(state.variables);
-    let greatest = state.variables.a;
-    let reason = `${state.variables.a} starts as the current greatest value.`;
+  record(statement, {
+    title: matchedCase.isDefault ? "default" : `case ${matchedCase.label}`,
+    lineNumber: matchedCase.lineNumber,
+    kind: "decision",
+    branchLabel: matchedCase.isDefault ? "default" : "case",
+    branchReason: matchedCase.isDefault
+      ? "Default case runs because no earlier case matched."
+      : `Case ${matchedCase.label} matches the switch expression.`,
+    next: "Execute statements inside the chosen case.",
+  });
 
-    if (state.variables.b >= greatest && state.variables.b >= state.variables.c) {
-      greatest = state.variables.b;
-      reason = `${state.variables.b} is greater than or equal to both ${state.variables.a} and ${state.variables.c}.`;
-    } else if (state.variables.c >= greatest && state.variables.c >= state.variables.b) {
-      greatest = state.variables.c;
-      reason = `${state.variables.c} is greater than or equal to both ${state.variables.a} and ${state.variables.b}.`;
+  executeStatements(matchedCase.body, runtime);
+}
+
+function executeUnsupported(statement, runtime, record) {
+  runtime.partialSupportHits += 1;
+  record(statement, {
+    title: statement.raw,
+    kind: "fallback",
+    branchReason: statement.reason,
+    next: "TraceWise AI will continue with fallback-safe execution.",
+  });
+}
+
+function createSyntheticStatementFactory() {
+  let counter = 1;
+  return function createSyntheticStatement(text, lineNumber) {
+    const cleaned = text.trim();
+    if (/^(int|double|float|long|char|String|boolean|Scanner)\b/.test(cleaned)) {
+      const match = cleaned.match(/^(int|double|float|long|char|String|boolean|Scanner)\s+(.+)$/);
+      const type = match?.[1];
+      const rest = match?.[2] || "";
+      return {
+        id: `synthetic-${counter++}`,
+        type: "declaration",
+        lineNumber,
+        valueType: type,
+        declarators: rest.split(",").map((segment) => {
+          const [name, initializer] = segment.split("=").map((part) => part.trim());
+          return { name, initializer: initializer || null };
+        }),
+        raw: cleaned.endsWith(";") ? cleaned : `${cleaned};`,
+      };
     }
 
-    state.variables.greatest = greatest;
-    state.branchDecisions.push({
-      nodeId: "line-2",
-      result: greatest,
-      reason,
-    });
-    state.output.push(`Greatest number = ${greatest}`);
-    record({
-      nodeId: "line-2",
-      lineNumber: 2,
-      title: "Evaluate the greatest-of-three decision chain",
-      previousVariables,
-      changedVariables: { greatest },
-      branchReason: reason,
-      kind: "decision",
-      next: "Print the chosen greatest value.",
-    });
-    return finish();
-  }
+    if (/^\w+\s*(\+\+|--)$/.test(cleaned) || /^(\+\+|--)\w+$/.test(cleaned)) {
+      return {
+        id: `synthetic-${counter++}`,
+        type: "update",
+        lineNumber,
+        expression: cleaned,
+        raw: cleaned,
+      };
+    }
 
-  if (subtype === "Factorial") {
-    state.variables.n = numberValue(inputs.n ?? 5, 5);
-    state.variables.fact = 1;
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Initialize factorial inputs",
-      changedVariables: { n: state.variables.n, fact: 1 },
-      kind: "input",
-      next: "Multiply fact by each number from 1 to n.",
-    });
+    const assignmentMatch = cleaned.match(/^(.+?)\s*(\+=|-=|\*=|\/=|%=|=)\s*(.+)$/);
+    if (assignmentMatch) {
+      return {
+        id: `synthetic-${counter++}`,
+        type: "assignment",
+        lineNumber,
+        target: assignmentMatch[1].trim(),
+        operator: assignmentMatch[2],
+        expression: assignmentMatch[3].trim(),
+        raw: cleaned.endsWith(";") ? cleaned : `${cleaned};`,
+      };
+    }
 
-    state.loopIterationCounts.factorialLoop = 0;
-    for (let i = 1; i <= state.variables.n; i += 1) {
-      const previousVariables = clone(state.variables);
-      state.variables.i = i;
-      state.variables.fact *= i;
-      state.loopIterationCounts.factorialLoop += 1;
-      record({
-        nodeId: "line-2",
-        lineNumber: 2,
-        title: `Factorial loop iteration ${i}`,
-        previousVariables,
-        changedVariables: { i, fact: state.variables.fact },
-        branchReason: `Iteration ${i} multiplies the running factorial by ${i}.`,
-        kind: "loop",
-        branchLabel: "repeat",
-        next: i === state.variables.n ? "The loop is complete; print the result." : "Move to the next multiplier.",
+    return {
+      id: `synthetic-${counter++}`,
+      type: "unsupported",
+      lineNumber,
+      raw: cleaned,
+      reason: "Synthetic control statement could not be fully parsed.",
+    };
+  };
+}
+
+function executeSingleStatement(statement, runtime, record, executeStatements, createSyntheticStatement) {
+  switch (statement.type) {
+    case "declaration":
+      executeDeclaration(statement, runtime, record);
+      return {};
+    case "assignment":
+      executeAssignment(statement, runtime, record);
+      return {};
+    case "update":
+      executeUpdate(statement, runtime, record);
+      return {};
+    case "output":
+      executeOutput(statement, runtime, record);
+      return {};
+    case "if":
+      executeIf(statement, runtime, record, executeStatements);
+      return {};
+    case "while":
+      executeWhile(statement, runtime, record, executeStatements);
+      return {};
+    case "for":
+      executeFor(statement, runtime, record, executeStatements, createSyntheticStatement);
+      return {};
+    case "switch":
+      executeSwitch(statement, runtime, record, executeStatements);
+      return {};
+    case "block":
+    case "wrapper":
+      executeStatements(statement.body, runtime);
+      return {};
+    case "break":
+      record(statement, {
+        title: "break",
+        kind: "break",
+        branchReason: "Break exits the current loop or switch block.",
+        next: "Return to the outer control flow.",
       });
-    }
-
-    state.output.push(`Factorial of ${state.variables.n} = ${state.variables.fact}`);
-    return finish();
+      return { break: true };
+    default:
+      executeUnsupported(statement, runtime, record);
+      return {};
   }
-
-  if (subtype === "Sum of n natural numbers") {
-    state.variables.n = numberValue(inputs.n ?? 6, 6);
-    state.variables.sum = 0;
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Initialize n and sum",
-      changedVariables: { n: state.variables.n, sum: 0 },
-      kind: "input",
-      next: "Accumulate numbers from 1 through n.",
-    });
-
-    state.loopIterationCounts.sumLoop = 0;
-    for (let i = 1; i <= state.variables.n; i += 1) {
-      const previousVariables = clone(state.variables);
-      state.variables.i = i;
-      state.variables.sum += i;
-      state.loopIterationCounts.sumLoop += 1;
-      record({
-        nodeId: "line-2",
-        lineNumber: 2,
-        title: `Add ${i} into the running sum`,
-        previousVariables,
-        changedVariables: { i, sum: state.variables.sum },
-        branchReason: `The loop includes ${i}, so the sum becomes ${state.variables.sum}.`,
-        kind: "loop",
-        branchLabel: "repeat",
-        next: i === state.variables.n ? "Loop finished; print the total." : "Continue to the next natural number.",
-      });
-    }
-
-    state.output.push(`Sum = ${state.variables.sum}`);
-    return finish();
-  }
-
-  if (subtype === "Multiplication table") {
-    state.variables.n = numberValue(inputs.n ?? 7, 7);
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Capture the number for the table",
-      changedVariables: { n: state.variables.n },
-      kind: "input",
-      next: "Generate ten rows for the table.",
-    });
-
-    state.loopIterationCounts.tableLoop = 0;
-    for (let i = 1; i <= 10; i += 1) {
-      const previousVariables = clone(state.variables);
-      state.variables.i = i;
-      state.variables.product = state.variables.n * i;
-      state.output.push(`${state.variables.n} x ${i} = ${state.variables.product}`);
-      state.loopIterationCounts.tableLoop += 1;
-      record({
-        nodeId: "line-2",
-        lineNumber: 2,
-        title: `Build row ${i} of the multiplication table`,
-        previousVariables,
-        changedVariables: { i, product: state.variables.product },
-        branchReason: `Each row multiplies ${state.variables.n} by the current counter ${i}.`,
-        kind: "loop",
-        branchLabel: "repeat",
-        next: i === 10 ? "The table is complete." : "Move to the next row.",
-      });
-    }
-    return finish();
-  }
-
-  if (subtype === "Prime number") {
-    state.variables.num = numberValue(inputs.num ?? 17, 17);
-    state.variables.isPrime = state.variables.num > 1;
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Initialize the prime check",
-      changedVariables: { num: state.variables.num, isPrime: state.variables.isPrime },
-      kind: "input",
-      next: "Try divisors from 2 to num - 1.",
-    });
-
-    state.loopIterationCounts.primeLoop = 0;
-    for (let i = 2; i < state.variables.num; i += 1) {
-      const previousVariables = clone(state.variables);
-      state.variables.i = i;
-      state.loopIterationCounts.primeLoop += 1;
-      if (state.variables.num % i === 0) {
-        state.variables.isPrime = false;
-        state.branchDecisions.push({
-          nodeId: "line-2",
-          result: "composite",
-          reason: `${state.variables.num} is divisible by ${i}, so it is not prime.`,
-        });
-        record({
-          nodeId: "line-2",
-          lineNumber: 2,
-          title: `Test divisor ${i}`,
-          previousVariables,
-          changedVariables: { i, isPrime: false },
-          branchReason: `${state.variables.num} % ${i} = 0, so the search stops.`,
-          kind: "decision",
-          branchLabel: "divides",
-          next: "Print that the number is not prime.",
-        });
-        break;
-      }
-
-      record({
-        nodeId: "line-2",
-        lineNumber: 2,
-        title: `Test divisor ${i}`,
-        previousVariables,
-        changedVariables: { i },
-        branchReason: `${state.variables.num} % ${i} is not 0, so the loop continues.`,
-        kind: "loop",
-        branchLabel: "continue",
-        next: i === state.variables.num - 1 ? "All divisors are tested." : "Try the next divisor.",
-      });
-    }
-
-    state.output.push(state.variables.isPrime ? `${state.variables.num} is prime` : `${state.variables.num} is not prime`);
-    return finish();
-  }
-
-  if (subtype === "Palindrome number") {
-    state.variables.num = numberValue(inputs.num ?? 121, 121);
-    state.variables.original = state.variables.num;
-    state.variables.reverse = 0;
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Initialize palindrome tracking values",
-      changedVariables: { num: state.variables.num, original: state.variables.original, reverse: 0 },
-      kind: "input",
-      next: "Build the reverse number digit by digit.",
-    });
-
-    state.loopIterationCounts.reverseLoop = 0;
-    while (state.variables.num > 0) {
-      const previousVariables = clone(state.variables);
-      state.variables.digit = state.variables.num % 10;
-      state.variables.reverse = state.variables.reverse * 10 + state.variables.digit;
-      state.variables.num = Math.floor(state.variables.num / 10);
-      state.loopIterationCounts.reverseLoop += 1;
-      record({
-        nodeId: "line-2",
-        lineNumber: 2,
-        title: `Reverse-building iteration ${state.loopIterationCounts.reverseLoop}`,
-        previousVariables,
-        changedVariables: {
-          digit: state.variables.digit,
-          reverse: state.variables.reverse,
-          num: state.variables.num,
-        },
-        branchReason: "Take the last digit, append it to reverse, and shrink the original number.",
-        kind: "loop",
-        branchLabel: "repeat",
-        next: state.variables.num > 0 ? "Continue with the next digit." : "Compare the reverse with the original number.",
-      });
-    }
-
-    state.variables.isPalindrome = state.variables.reverse === state.variables.original;
-    state.branchDecisions.push({
-      nodeId: "line-3",
-      result: state.variables.isPalindrome,
-      reason: `${state.variables.reverse} ${state.variables.isPalindrome ? "matches" : "does not match"} ${state.variables.original}.`,
-    });
-    state.output.push(state.variables.isPalindrome ? "Palindrome number" : "Not a palindrome number");
-    record({
-      nodeId: "line-3",
-      lineNumber: 3,
-      title: "Compare original and reversed values",
-      previousVariables: clone(state.variables),
-      changedVariables: { isPalindrome: state.variables.isPalindrome },
-      branchReason: `${state.variables.reverse} ${state.variables.isPalindrome ? "=" : "!="} ${state.variables.original}.`,
-      kind: "decision",
-      next: "Print the palindrome result.",
-    });
-    return finish();
-  }
-
-  if (subtype === "Fibonacci series") {
-    state.variables.n = numberValue(inputs.n ?? 7, 7);
-    state.variables.a = 0;
-    state.variables.b = 1;
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: "Initialize the first two Fibonacci values",
-      changedVariables: { n: state.variables.n, a: 0, b: 1 },
-      kind: "input",
-      next: "Emit each term and compute the next pair.",
-    });
-
-    state.loopIterationCounts.fibonacciLoop = 0;
-    for (let i = 0; i < state.variables.n; i += 1) {
-      const previousVariables = clone(state.variables);
-      state.output.push(String(state.variables.a));
-      state.variables.next = state.variables.a + state.variables.b;
-      state.variables.a = state.variables.b;
-      state.variables.b = state.variables.next;
-      state.variables.i = i;
-      state.loopIterationCounts.fibonacciLoop += 1;
-      record({
-        nodeId: "line-2",
-        lineNumber: 2,
-        title: `Generate Fibonacci term ${i + 1}`,
-        previousVariables,
-        changedVariables: { i, next: state.variables.next, a: state.variables.a, b: state.variables.b },
-        branchReason: "The next value is the sum of the previous two terms.",
-        kind: "loop",
-        branchLabel: "repeat",
-        next: i + 1 === state.variables.n ? "The series is complete." : "Continue to the next term.",
-      });
-    }
-    return finish();
-  }
-
-  if (subtype === "Right triangle star pattern" || subtype === "Pyramid") {
-    const rows = numberValue(inputs.rows ?? inputs.n ?? 5, 5);
-    state.variables.rows = rows;
-    record({
-      nodeId: "line-1",
-      lineNumber: 1,
-      title: subtype === "Pyramid" ? "Set the number of pyramid rows" : "Set the number of rows for the pattern",
-      changedVariables: { rows },
-      kind: "input",
-      next: "Render the pattern row by row.",
-    });
-
-    const counterName = subtype === "Pyramid" ? "pyramidRows" : "patternRows";
-    state.loopIterationCounts[counterName] = 0;
-    for (let i = 1; i <= rows; i += 1) {
-      const previousVariables = clone(state.variables);
-      const row =
-        subtype === "Pyramid"
-          ? `${" ".repeat(rows - i)}${"* ".repeat(i).trimEnd()}`
-          : "* ".repeat(i).trimEnd();
-
-      state.variables.i = i;
-      state.variables.currentRow = row;
-      state.output.push(row);
-      state.loopIterationCounts[counterName] += 1;
-      record({
-        nodeId: "line-2",
-        lineNumber: 2,
-        title: `${subtype === "Pyramid" ? "Render pyramid row" : "Render triangle row"} ${i}`,
-        previousVariables,
-        changedVariables: { i, currentRow: row },
-        branchReason:
-          subtype === "Pyramid"
-            ? `Row ${i} uses ${rows - i} leading spaces and ${i} star groups.`
-            : `Row ${i} contains exactly ${i} stars.`,
-        kind: "loop",
-        branchLabel: "repeat",
-        next: i === rows ? "The pattern is complete." : "Move to the next row.",
-      });
-    }
-    return finish();
-  }
-
-  return null;
 }
 
 export function simulationEngine(normalizedProgram) {
-  const supportedState = simulateDemoPrograms(normalizedProgram);
-  const base =
-    supportedState ||
-    simulateFallback(normalizedProgram);
-  const executionTrace = base.steps.map((step) => step.nodeId);
+  const runtime = {
+    variables: {},
+    variableTypes: {},
+    customInputs: normalizedProgram.customInputs || {},
+    outputText: "",
+    steps: [],
+    variableHistory: [],
+    branchDecisions: [],
+    loopIterationCounts: {},
+    partialSupportHits: 0,
+    currentInputTarget: null,
+    currentInputType: null,
+  };
+
+  const record = createStepRecorder(runtime);
+  const createSyntheticStatement = createSyntheticStatementFactory();
+
+  const executeStatements = (statements, currentRuntime) => {
+    for (const statement of statements) {
+      const control = executeSingleStatement(statement, currentRuntime, record, executeStatements, createSyntheticStatement);
+      if (control?.break) {
+        return control;
+      }
+    }
+    return {};
+  };
+
+  try {
+    executeStatements(normalizedProgram.tree || [], runtime);
+  } catch (error) {
+    runtime.partialSupportHits += 1;
+    record(
+      {
+        id: "runtime-fallback",
+        lineNumber: normalizedProgram.lines?.[0]?.lineNumber || 1,
+        raw: "Fallback trace step",
+        type: "fallback",
+      },
+      {
+        title: "Fallback trace step",
+        kind: "fallback",
+        branchReason: `The parser hit an unsupported runtime case: ${error.message}.`,
+        next: "Return the safest partial trace instead of crashing.",
+      },
+    );
+  }
+
+  const output = runtime.outputText.replace(/\n$/, "");
+  const executionTrace = runtime.steps.map((step) => step.nodeId);
   const visitedNodes = [...new Set(executionTrace)];
 
   return {
     currentStepIndex: 0,
-    currentNodeId: base.steps[0]?.nodeId || "start",
-    activeCodeLine: base.steps[0]?.lineNumber || 0,
-    variables: base.variables,
-    previousVariables: base.previousVariables,
-    changedVariables: base.changedVariables,
-    variableHistory: base.variableHistory,
-    output: base.output,
+    currentNodeId: runtime.steps[0]?.nodeId || "start",
+    activeCodeLine: runtime.steps[0]?.lineNumber || 0,
+    variables: clone(runtime.variables),
+    previousVariables: runtime.steps.at(-1)?.previousVariables || {},
+    changedVariables: runtime.steps.at(-1)?.changedVariables || {},
+    variableHistory: runtime.variableHistory,
+    output: output ? output.split("\n") : [],
+    outputText: output,
     executionTrace,
     visitedNodes,
-    branchDecisions: base.branchDecisions,
-    loopIterationCounts: base.loopIterationCounts,
-    steps: base.steps,
+    branchDecisions: runtime.branchDecisions,
+    loopIterationCounts: runtime.loopIterationCounts,
+    partialSupportHits: runtime.partialSupportHits,
+    steps: runtime.steps,
   };
 }

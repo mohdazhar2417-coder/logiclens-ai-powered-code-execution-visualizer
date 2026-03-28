@@ -25,6 +25,7 @@ export async function detect(req, res) {
       confidence: normalizedProgram.confidence,
       supportLevel: normalizedProgram.supportLevel,
       reasons: normalizedProgram.reasons,
+      matchedSignals: normalizedProgram.matchedSignals,
     },
     normalizedProgram,
   });
@@ -46,8 +47,12 @@ export async function explain(req, res) {
       category: normalizedProgram.category,
       subtype: normalizedProgram.subtype,
       confidence: normalizedProgram.confidence,
-      supportLevel: normalizedProgram.supportLevel,
+      supportLevel:
+        normalizedProgram.supportLevel === "full" && trace.partialSupportHits > 0
+          ? "partial"
+          : normalizedProgram.supportLevel,
       reasons: normalizedProgram.reasons,
+      matchedSignals: normalizedProgram.matchedSignals,
     },
     normalizedProgram,
     steps: trace.steps,
@@ -56,10 +61,10 @@ export async function explain(req, res) {
     variableHistory: trace.variableHistory,
     branchDecisions: trace.branchDecisions,
     loopIterationCounts: trace.loopIterationCounts,
-    finalOutput: trace.output.join("\n"),
+    finalOutput: trace.outputText,
     finalExplanation: explainFinalOutput({
       subtype: normalizedProgram.subtype,
-      finalOutput: trace.output.join("\n"),
+      finalOutput: trace.outputText,
       variables: trace.variables,
       branchDecisions: trace.branchDecisions,
       loopIterationCounts: trace.loopIterationCounts,
@@ -72,9 +77,13 @@ export async function explain(req, res) {
       previousVariables: trace.previousVariables,
       changedVariables: trace.changedVariables,
       output: trace.output,
+      outputText: trace.outputText,
       executionTrace: trace.executionTrace,
       visitedNodes: trace.visitedNodes,
-      supportLevel: normalizedProgram.supportLevel,
+      supportLevel:
+        normalizedProgram.supportLevel === "full" && trace.partialSupportHits > 0
+          ? "partial"
+          : normalizedProgram.supportLevel,
       confidence: normalizedProgram.confidence,
     },
   });
@@ -92,7 +101,7 @@ export async function finalSummary(req, res) {
   return res.json(
     explainFinalOutput({
       subtype: normalizedProgram.subtype,
-      finalOutput: trace.output.join("\n"),
+      finalOutput: trace.outputText,
       variables: trace.variables,
       branchDecisions: trace.branchDecisions,
       loopIterationCounts: trace.loopIterationCounts,

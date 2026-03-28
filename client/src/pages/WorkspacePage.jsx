@@ -156,6 +156,8 @@ function WorkspacePage() {
         code,
         customInputs,
         traceSummary: traceData,
+        supportLevel: detection?.supportLevel,
+        confidence: detection?.confidence,
         finalOutput: traceData.finalOutput,
       });
       setStatus("Trace saved to your history.");

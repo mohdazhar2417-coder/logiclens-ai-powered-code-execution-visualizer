@@ -27,6 +27,14 @@ const savedTraceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    supportLevel: {
+      type: String,
+      default: "full",
+    },
+    confidence: {
+      type: Number,
+      default: 0,
+    },
     finalOutput: {
       type: String,
       default: "",
