@@ -17,17 +17,26 @@ function CustomFlowNode({ data }) {
 
   return (
     <div
-      className={`min-w-[220px] rounded-3xl border bg-gradient-to-br p-4 shadow-[0_20px_60px_rgba(2,6,23,0.45)] ${tone} ${
-        data.active ? "ring-2 ring-amber-300 shadow-[0_0_40px_rgba(251,191,36,0.22)]" : ""
-      } ${data.visited ? "opacity-100" : "opacity-80"}`}
+      className={`min-w-[220px] rounded-3xl border bg-gradient-to-br p-4 shadow-[0_20px_60px_rgba(2,6,23,0.18)] transition-all duration-200 ${tone} ${
+        data.active
+          ? "scale-[1.03] border-orange-400 bg-[linear-gradient(135deg,rgba(251,191,36,0.32),rgba(196,181,253,0.34))] ring-4 ring-orange-300/80 shadow-[0_0_0_6px_rgba(255,255,255,0.9),0_0_42px_rgba(249,115,22,0.55),0_0_72px_rgba(167,139,250,0.35)]"
+          : ""
+      } ${data.visited ? "opacity-100" : "opacity-72"}`}
     >
-      <Handle type="target" position={Position.Top} className="!border-none !bg-amber-300" />
+      <Handle type="target" position={Position.Top} className="!border-none !bg-orange-400" />
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm font-semibold text-white">{data.label}</p>
-          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-200">
-            {data.kind}
-          </span>
+          <div className="flex items-center gap-2">
+            {data.active && (
+              <span className="rounded-full bg-orange-400 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-950">
+                Live
+              </span>
+            )}
+            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-200">
+              {data.kind}
+            </span>
+          </div>
         </div>
         <p className="text-xs text-slate-300">{data.description}</p>
         {data.variableChips?.length > 0 && (
@@ -40,7 +49,7 @@ function CustomFlowNode({ data }) {
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="!border-none !bg-cyan-300" />
+      <Handle type="source" position={Position.Bottom} className="!border-none !bg-violet-400" />
     </div>
   );
 }

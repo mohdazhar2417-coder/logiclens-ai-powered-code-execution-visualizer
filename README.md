@@ -162,21 +162,27 @@ Admin:
 
 ### Frontend on Vercel
 
+Deploy the `client/` folder as the Vercel project root.
+
 - Root directory: `client`
 - Build command: `npm run build`
 - Output directory: `dist`
-- Environment variable: `VITE_API_URL=https://your-render-api.onrender.com`
+- SPA routing config: `client/vercel.json`
+- Required environment variable:
+  - `VITE_API_URL=https://your-render-api.onrender.com`
 
 ### Backend on Render
 
+- Deploy the repo with the included `render.yaml`, or create a Render web service manually using the same settings.
+- Blueprint file: `render.yaml`
 - Root directory: `server`
 - Build command: `npm install`
 - Start command: `npm run start`
+- Health check path: `/api/health`
 - Environment variables:
   - `MONGO_URI`
   - `JWT_SECRET`
   - `FRONTEND_URL`
-  - `PORT`
   - `ADMIN_NAME`
   - `ADMIN_EMAIL`
   - `ADMIN_PASSWORD`

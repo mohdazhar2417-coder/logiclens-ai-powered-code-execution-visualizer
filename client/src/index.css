@@ -3,7 +3,7 @@
 
 :root {
   color: #45352d;
-  background: #fffaf0;
+  background: #fffaf4;
   font-family: "Space Grotesk", sans-serif;
 }
 
@@ -15,8 +15,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(251, 191, 36, 0.18), transparent 28%),
-    linear-gradient(180deg, #fffaf0 0%, #f7efe2 52%, #f2e6d5 100%);
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(196, 181, 253, 0.2), transparent 34%),
+    linear-gradient(180deg, #fffaf4 0%, #f7efe8 48%, #f2e9dc 100%);
 }
 
 * {
@@ -37,10 +38,10 @@ body {
 
 .panel {
   border: 1px solid rgba(146, 118, 80, 0.16);
-  background: linear-gradient(180deg, rgba(255, 250, 242, 0.9), rgba(249, 240, 227, 0.94));
+  background: linear-gradient(180deg, rgba(255, 250, 244, 0.94), rgba(247, 238, 231, 0.9));
   border-radius: 1.75rem;
   padding: 1.5rem;
-  box-shadow: 0 20px 60px rgba(170, 134, 89, 0.15);
+  box-shadow: 0 20px 60px rgba(170, 134, 89, 0.12);
 }
 
 .input-base {
@@ -64,7 +65,7 @@ body {
 
 .react-flow__controls,
 .react-flow__minimap {
-  background: rgba(255, 251, 245, 0.9) !important;
+  background: rgba(255, 251, 245, 0.92) !important;
   border: 1px solid rgba(146, 118, 80, 0.16) !important;
 }
 
@@ -103,6 +104,14 @@ body {
 .bg-white\/5,
 .bg-white\/10 {
   background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.bg-violet-300 {
+  background-color: rgba(196, 181, 253, 0.9) !important;
+}
+
+.text-violet-300 {
+  color: #7c63cb !important;
 }
 
 .bg-slate-950\/60,

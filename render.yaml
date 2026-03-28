@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: logiclens-api
+    runtime: node
+    rootDir: server
+    plan: free
+    autoDeploy: true
+    buildCommand: npm install
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: ADMIN_NAME
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

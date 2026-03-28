@@ -37,6 +37,8 @@ function WorkspacePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [selectedNodeStep, setSelectedNodeStep] = useState(null);
+  const [teacherTab, setTeacherTab] = useState("teacher");
+  const [utilityTab, setUtilityTab] = useState("history");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -89,6 +91,13 @@ function WorkspacePage() {
 
   const steps = traceData?.steps || [];
   const currentStep = steps[currentStepIndex] || null;
+  const liveOutput = currentStep ? currentStep.outputSnapshot : "";
+  const isPatternProgram = detection?.category === "Pattern Programs";
+  const progressPercent = steps.length ? Math.round(((currentStepIndex + 1) / steps.length) * 100) : 0;
+
+  const visitedNodeIds = useMemo(() => {
+    return new Set(steps.slice(0, currentStepIndex + 1).map((step) => step.nodeId).filter(Boolean));
+  }, [steps, currentStepIndex]);
 
   const flowNodes = useMemo(() => {
     return (traceData?.nodes || []).map((node) => ({
@@ -96,10 +105,37 @@ function WorkspacePage() {
       data: {
         ...node.data,
         active: node.id === currentStep?.nodeId,
-        visited: (traceData?.simulationState?.visitedNodes || []).includes(node.id),
+        visited: visitedNodeIds.has(node.id),
       },
     }));
-  }, [traceData, currentStep]);
+  }, [traceData, currentStep, visitedNodeIds]);
+
+  const flowEdges = useMemo(() => {
+    return (traceData?.edges || []).map((edge) => {
+      const isActive = edge.source === currentStep?.nodeId || edge.target === currentStep?.nodeId;
+      const isVisited = visitedNodeIds.has(edge.source) && visitedNodeIds.has(edge.target);
+      const baseStyle = edge.style || {};
+
+      return {
+        ...edge,
+        animated: isActive || edge.animated,
+        style: {
+          ...baseStyle,
+          stroke: isActive ? "#f97316" : isVisited ? "#8b5cf6" : (baseStyle.stroke || "rgba(120, 113, 108, 0.48)"),
+          strokeWidth: isActive ? 4 : isVisited ? 3 : 2.2,
+          filter: isActive ? "drop-shadow(0 0 10px rgba(249, 115, 22, 0.45))" : baseStyle.filter,
+        },
+        labelStyle: {
+          fill: isActive ? "#9a3412" : isVisited ? "#6d28d9" : "#6b7280",
+          fontWeight: isActive ? 700 : 600,
+        },
+        labelBgStyle: {
+          fill: isActive ? "rgba(255, 237, 213, 0.98)" : "rgba(255, 255, 255, 0.92)",
+          fillOpacity: 1,
+        },
+      };
+    });
+  }, [traceData, currentStep, visitedNodeIds]);
 
   useTracePlayback({
     enabled: isPlaying,
@@ -138,6 +174,8 @@ function WorkspacePage() {
       setIsPlaying(false);
       setSelectedNode(null);
       setSelectedNodeStep(null);
+      setTeacherTab("teacher");
+      setUtilityTab("history");
       setStatus("Trace generated successfully.");
     } catch (error) {
       setStatus(error.message);
@@ -183,82 +221,189 @@ function WorkspacePage() {
     setSelectedNode(node);
     const step = steps.find((item) => item.nodeId === node.id);
     setSelectedNodeStep(step || null);
+    if (step) {
+      setCurrentStepIndex(step.stepIndex);
+    }
+    setTeacherTab("node");
   }
 
-  return (
-    <main className="mx-auto max-w-[1560px] px-4 py-8 sm:px-6 lg:px-8">
-      <div className="space-y-6">
-        <div className="panel flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Trace workspace</p>
-            <h1 className="text-3xl font-semibold text-white">Visualize how your beginner Java program executes internally</h1>
-            <p className="max-w-3xl text-slate-300">
-              Switch between learning and demo mode, load a sample, tweak custom inputs, and trace the program one educational
-              step at a time.
-            </p>
-          </div>
-          <ModeSwitcher value={mode} onChange={setMode} />
-        </div>
+  const teacherTabs = [
+    { key: "teacher", label: "Teacher mode" },
+    { key: "node", label: "Node details" },
+    { key: "why", label: "Why output" },
+  ];
 
-        <div className="grid gap-4 xl:grid-cols-3">
-          <CategorySelector value={selectedCategory} onChange={setSelectedCategory} />
-          <ProgramSelector programs={filteredPrograms} value={selectedProgramId} onChange={handleProgramChange} />
-          <div className="panel flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Trace status</p>
-              <p className="mt-1 text-sm text-slate-300">{loading ? "Analyzing code..." : status || "Ready for analysis."}</p>
+  const utilityTabs = [
+    { key: "history", label: "Variable history" },
+    { key: "output", label: "Live output" },
+    { key: "summary", label: "Trace summary" },
+  ];
+
+  return (
+    <main className="mx-auto max-w-[1720px] px-4 py-5 sm:px-6 lg:px-8">
+      <div className="space-y-5">
+        <section className="panel overflow-hidden">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Trace workspace</p>
+              <div className="space-y-2">
+                <h1 className="max-w-4xl text-3xl font-semibold text-white">
+                  See how beginner Java code moves from parsing to simulation to visual flow.
+                </h1>
+                <p className="max-w-3xl text-slate-300">
+                  This layout is optimized around the real interaction loop: change code, press next, watch the graph react,
+                  and read the explanation without jumping around the page.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 xl:items-end">
+              <ModeSwitcher value={mode} onChange={setMode} />
+              <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(251,191,36,0.1),rgba(196,181,253,0.18))] px-4 py-3 text-sm text-slate-300">
+                {loading ? "Analyzing code..." : status || "Ready for analysis."}
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <ControlBar
-          canPlay={steps.length > 0}
-          isPlaying={isPlaying}
-          onAnalyze={handleAnalyze}
-          onPrev={() => setCurrentStepIndex((index) => Math.max(index - 1, 0))}
-          onNext={() => setCurrentStepIndex((index) => Math.min(index + 1, steps.length - 1))}
-          onReset={() => {
-            setCurrentStepIndex(0);
-            setIsPlaying(false);
-          }}
-          onTogglePlay={() => setIsPlaying((value) => !value)}
-          onSave={handleSaveTrace}
-          onFavorite={handleFavorite}
-          saveDisabled={!traceData}
-          favoriteDisabled={!selectedProgram}
-        />
+        <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr_0.8fr]">
+          <CategorySelector value={selectedCategory} onChange={setSelectedCategory} />
+          <ProgramSelector programs={filteredPrograms} value={selectedProgramId} onChange={handleProgramChange} />
+          <div className="panel flex flex-col justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Parser to flow link</p>
+              <h3 className="mt-1 text-lg font-semibold text-white">Connected end to end</h3>
+            </div>
+            <p className="text-sm text-slate-300">
+              Parsed statements feed the simulation engine, and the resulting execution steps drive the React Flow graph,
+              active node state, visited node history, and line highlighting.
+            </p>
+          </div>
+        </section>
 
-        <div className="grid gap-6 2xl:grid-cols-[1.15fr_1.3fr_0.85fr]">
-          <div className="space-y-6">
+        <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr] xl:items-start">
+          <div className="space-y-4">
             <CodeEditor code={code} onChange={setCode} activeLine={currentStep?.lineNumber} />
-            <InputPanel
-              inputs={customInputs}
-              onChange={(key, value) => setCustomInputs((current) => ({ ...current, [key]: value }))}
-            />
-            <DetectionCard detection={detection} />
-            <ConfidenceCard detection={detection} />
+            <div className="grid gap-4 md:grid-cols-2">
+              <DetectionCard detection={detection} />
+              <ConfidenceCard detection={detection} />
+            </div>
           </div>
 
-          <div className="space-y-6">
-            <FlowCanvas nodes={flowNodes} edges={traceData?.edges || []} onNodeClick={handleNodeClick} />
+          <div className="panel space-y-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Execution studio</p>
+                <h3 className="mt-1 text-lg font-semibold text-white">Controls, timeline, graph, and teaching in one zone</h3>
+              </div>
+              <div className="rounded-[1.4rem] border border-white/10 bg-white/55 px-4 py-3 text-sm text-slate-300">
+                <p className="font-medium text-white">{currentStep?.title || "No step selected yet"}</p>
+                <p className="mt-1">Line {currentStep?.lineNumber || "-"} - {progressPercent}% through the trace</p>
+              </div>
+            </div>
+
+            <ControlBar
+              canPlay={steps.length > 0}
+              isPlaying={isPlaying}
+              onAnalyze={handleAnalyze}
+              onPrev={() => setCurrentStepIndex((index) => Math.max(index - 1, 0))}
+              onNext={() => setCurrentStepIndex((index) => Math.min(index + 1, steps.length - 1))}
+              onReset={() => {
+                setCurrentStepIndex(0);
+                setIsPlaying(false);
+              }}
+              onTogglePlay={() => setIsPlaying((value) => !value)}
+              onSave={handleSaveTrace}
+              onFavorite={handleFavorite}
+              saveDisabled={!traceData}
+              favoriteDisabled={!selectedProgram}
+            />
+
             <StepTimeline steps={steps} currentStepIndex={currentStepIndex} onSelect={setCurrentStepIndex} />
-            <ExplanationPanel step={currentStep} />
-            <WhyOutputPanel summary={traceData?.finalExplanation} />
-          </div>
 
-          <div className="space-y-6">
-            <VariablePanel currentStep={currentStep} simulationState={traceData?.simulationState} />
-            <VariableHistoryPanel history={traceData?.variableHistory} />
-            <OutputPanel output={currentStep?.outputSnapshot || traceData?.finalOutput} />
-            <PatternPreviewPanel output={currentStep?.outputSnapshot || traceData?.finalOutput} />
-            <TraceSummaryPanel
-              detection={detection}
-              branchDecisions={traceData?.branchDecisions}
-              loopIterationCounts={traceData?.loopIterationCounts}
-            />
-            <NodeDetailsDrawer node={selectedNode} step={selectedNodeStep || currentStep} />
+            <div className="grid gap-4 2xl:grid-cols-[1.24fr_0.82fr]">
+              <FlowCanvas nodes={flowNodes} edges={flowEdges} onNodeClick={handleNodeClick} />
+
+              <div className="space-y-4">
+                <div className="rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(244,234,255,0.5))] p-4 shadow-[0_14px_36px_rgba(143,105,65,0.08)]">
+                  <div className="flex flex-wrap gap-2">
+                    {teacherTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setTeacherTab(tab.key)}
+                        className={`rounded-full px-4 py-2 text-sm transition ${
+                          teacherTab === tab.key
+                            ? "bg-gradient-to-r from-amber-300 via-orange-300 to-violet-300 text-slate-950"
+                            : "bg-white/55 text-slate-300 hover:bg-white/85"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/55 p-4 text-sm text-slate-300">
+                    {teacherTab === "teacher" && (
+                      <p>Teacher mode sits right beside the graph now, so the explanation updates where the learner is already looking.</p>
+                    )}
+                    {teacherTab === "node" && (
+                      <p>Click any graph node to inspect its code line, variable changes, and the reason for the next transition.</p>
+                    )}
+                    {teacherTab === "why" && <p>Use the final explanation to connect the whole trace to the output the learner sees.</p>}
+                  </div>
+                </div>
+
+                {teacherTab === "teacher" && <ExplanationPanel step={currentStep} />}
+                {teacherTab === "node" && <NodeDetailsDrawer node={selectedNode} step={selectedNodeStep || currentStep} />}
+                {teacherTab === "why" && <WhyOutputPanel summary={traceData?.finalExplanation} />}
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[0.92fr_0.92fr_1.16fr]">
+          <InputPanel
+            inputs={customInputs}
+            onChange={(key, value) => setCustomInputs((current) => ({ ...current, [key]: value }))}
+          />
+
+          <VariablePanel currentStep={currentStep} simulationState={traceData?.simulationState} />
+
+          <div className="space-y-4">
+            <div className="panel">
+              <div className="flex flex-wrap gap-2">
+                {utilityTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setUtilityTab(tab.key)}
+                    className={`rounded-full px-4 py-2 text-sm transition ${
+                      utilityTab === tab.key
+                        ? "bg-gradient-to-r from-violet-300 via-fuchsia-200 to-amber-300 text-slate-950"
+                        : "bg-white/55 text-slate-300 hover:bg-white/85"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {utilityTab === "history" && <VariableHistoryPanel history={traceData?.variableHistory} />}
+            {utilityTab === "output" && (
+              <div className="space-y-4">
+                <OutputPanel output={liveOutput} />
+                {isPatternProgram && <PatternPreviewPanel output={liveOutput} />}
+              </div>
+            )}
+            {utilityTab === "summary" && (
+              <TraceSummaryPanel
+                detection={detection}
+                branchDecisions={traceData?.branchDecisions}
+                loopIterationCounts={traceData?.loopIterationCounts}
+              />
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );
