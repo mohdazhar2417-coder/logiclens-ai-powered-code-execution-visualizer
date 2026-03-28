@@ -2,8 +2,8 @@
 @import "tailwindcss";
 
 :root {
-  color: #e2e8f0;
-  background: #020617;
+  color: #45352d;
+  background: #fffaf0;
   font-family: "Space Grotesk", sans-serif;
 }
 
@@ -14,7 +14,9 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: #020617;
+  background:
+    radial-gradient(circle at top, rgba(251, 191, 36, 0.18), transparent 28%),
+    linear-gradient(180deg, #fffaf0 0%, #f7efe2 52%, #f2e6d5 100%);
 }
 
 * {
@@ -34,28 +36,89 @@ body {
 }
 
 .panel {
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(2, 6, 23, 0.9));
+  border: 1px solid rgba(146, 118, 80, 0.16);
+  background: linear-gradient(180deg, rgba(255, 250, 242, 0.9), rgba(249, 240, 227, 0.94));
   border-radius: 1.75rem;
   padding: 1.5rem;
-  box-shadow: 0 22px 70px rgba(2, 6, 23, 0.35);
+  box-shadow: 0 20px 60px rgba(170, 134, 89, 0.15);
 }
 
 .input-base {
   width: 100%;
   border-radius: 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.72);
-  color: #f8fafc;
+  border: 1px solid rgba(146, 118, 80, 0.18);
+  background: rgba(255, 255, 255, 0.82);
+  color: #3f3028;
   padding: 0.875rem 1rem;
   outline: none;
   transition: border-color 160ms ease, background 160ms ease;
 }
 
 .input-base:focus {
-  border-color: rgba(253, 224, 71, 0.75);
+  border-color: rgba(217, 119, 6, 0.75);
 }
 
 .react-flow__attribution {
   display: none;
+}
+
+.react-flow__controls,
+.react-flow__minimap {
+  background: rgba(255, 251, 245, 0.9) !important;
+  border: 1px solid rgba(146, 118, 80, 0.16) !important;
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  color: #5b4637 !important;
+  border-bottom: 1px solid rgba(146, 118, 80, 0.12) !important;
+}
+
+.text-white,
+.text-slate-100,
+.text-slate-200 {
+  color: #3f3028 !important;
+}
+
+.text-slate-300 {
+  color: #5f4d41 !important;
+}
+
+.text-slate-400 {
+  color: #7b685b !important;
+}
+
+.text-slate-500 {
+  color: #927b6a !important;
+}
+
+.text-amber-100 {
+  color: #8a5a19 !important;
+}
+
+.text-amber-300 {
+  color: #b96b12 !important;
+}
+
+.bg-white\/5,
+.bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.bg-slate-950\/60,
+.bg-slate-950\/70,
+.bg-slate-950\/80,
+.bg-slate-900\/60,
+.bg-slate-900\/70 {
+  background-color: rgba(255, 251, 245, 0.9) !important;
+}
+
+.border-white\/5,
+.border-white\/10 {
+  border-color: rgba(146, 118, 80, 0.16) !important;
+}
+
+.hover\:bg-white\/10:hover,
+.hover\:bg-white\/70:hover {
+  background-color: rgba(255, 255, 255, 0.95) !important;
 }

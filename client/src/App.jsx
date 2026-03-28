@@ -12,7 +12,7 @@ import AdminPage from "./pages/AdminPage.jsx";
 
 function App() {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.18),_transparent_34%),linear-gradient(180deg,_#020617_0%,_#08111d_100%)] text-slate-100">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.24),_transparent_32%),radial-gradient(circle_at_right,_rgba(56,189,248,0.16),_transparent_28%),linear-gradient(180deg,_#fffaf0_0%,_#f7efe2_48%,_#f2e6d5_100%)] text-slate-800">
       <Navbar />
       <Routes>
         <Route path="/" element={<LandingPage />} />

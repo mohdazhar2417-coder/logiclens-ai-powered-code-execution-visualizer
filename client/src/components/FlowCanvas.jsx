@@ -19,10 +19,10 @@ function FlowCanvas({ nodes, edges, onNodeClick }) {
           nodeTypes={nodeTypes}
           onNodeClick={(_event, node) => onNodeClick?.(node)}
           fitView
-          className="bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),_transparent_28%),linear-gradient(180deg,_rgba(2,6,23,0.98),_rgba(8,15,32,0.98))]"
+          className="bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),_transparent_28%),linear-gradient(180deg,_rgba(255,252,246,0.95),_rgba(246,238,224,0.96))]"
         >
-          <MiniMap pannable zoomable className="!bg-slate-950/80" />
-          <Controls className="!border-none !bg-slate-950/80 !text-white" />
+          <MiniMap pannable zoomable className="!bg-white/80" />
+          <Controls className="!border-none !bg-white/80 !text-slate-700" />
           <Background color="rgba(148, 163, 184, 0.18)" gap={24} />
         </ReactFlow>
       </div>

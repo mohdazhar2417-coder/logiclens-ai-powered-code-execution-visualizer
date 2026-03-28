@@ -7,7 +7,9 @@ function NavItem({ to, children }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `rounded-full px-4 py-2 text-sm transition ${isActive ? "bg-amber-400 text-slate-950" : "text-slate-300 hover:bg-white/10"}`
+        `rounded-full px-4 py-2 text-sm transition ${
+          isActive ? "bg-amber-400 text-slate-950 shadow-sm" : "text-slate-700 hover:bg-white/70"
+        }`
       }
     >
       {children}
@@ -20,15 +22,15 @@ function Navbar() {
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/80 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-amber-900/10 bg-white/78 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <Link to="/" className="flex items-center gap-3">
           <div className="flex size-11 items-center justify-center rounded-2xl bg-amber-400 text-slate-950 shadow-[0_0_40px_rgba(251,191,36,0.3)]">
             <Sparkles className="size-5" />
           </div>
           <div>
-            <p className="font-display text-lg font-semibold tracking-tight text-white">LOGICLENS</p>
-            <p className="text-xs text-slate-400">Powered by TraceWise AI</p>
+            <p className="font-display text-lg font-semibold tracking-tight text-slate-900">LOGICLENS</p>
+            <p className="text-xs text-slate-500">Powered by TraceWise AI</p>
           </div>
         </Link>
 
@@ -44,7 +46,7 @@ function Navbar() {
         <div className="flex items-center gap-3">
           {isAuthenticated ? (
             <>
-              <div className="hidden rounded-full border border-white/10 px-4 py-2 text-sm text-slate-300 sm:block">
+              <div className="hidden rounded-full border border-amber-900/10 bg-white/70 px-4 py-2 text-sm text-slate-700 sm:block">
                 {user?.name} · {user?.role}
               </div>
               <button
@@ -53,14 +55,14 @@ function Navbar() {
                   logout();
                   navigate("/");
                 }}
-                className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/10"
+                className="rounded-full border border-amber-900/10 bg-white/65 px-4 py-2 text-sm text-slate-700 transition hover:bg-white"
               >
                 Logout
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" className="hidden rounded-full px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 sm:block">
+              <Link to="/login" className="hidden rounded-full px-4 py-2 text-sm text-slate-700 transition hover:bg-white/70 sm:block">
                 Login
               </Link>
               <Link to="/signup" className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">
@@ -68,7 +70,7 @@ function Navbar() {
               </Link>
             </>
           )}
-          <button type="button" className="rounded-full border border-white/10 p-2 text-slate-300 lg:hidden">
+          <button type="button" className="rounded-full border border-amber-900/10 bg-white/65 p-2 text-slate-700 lg:hidden">
             <Menu className="size-5" />
           </button>
         </div>
