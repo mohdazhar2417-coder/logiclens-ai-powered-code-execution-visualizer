@@ -1,16 +1,189 @@
-# React + Vite
+# LOGICLENS — Powered by TraceWise AI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+See how beginner Java programs actually think.
 
-Currently, two official plugins are available:
+## Project Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+LogicLens is a full-stack educational platform for beginner programmers who struggle to understand what happens inside a Java program after they press run. Instead of showing only final output, LogicLens traces how variables change, why branches are taken, how loops evolve over time, and how output is built step by step.
 
-## React Compiler
+TraceWise AI is the internal tracing layer. LogicLens is the product experience around it.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Real-World Problem
 
-## Expanding the ESLint configuration
+Beginner programmers often memorize syntax without understanding execution. That leads to weak fundamentals, confusion during interview preparation, and difficulty debugging basic control-flow problems.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+LogicLens addresses that gap by turning structured beginner Java programs into an interactive execution walkthrough with:
+
+- category and subtype detection
+- variable tracking and history
+- branch and loop explanations
+- synced code highlighting
+- React Flow visualization
+- output simulation
+- saved traces and favorites
+
+## Features
+
+- JWT-based authentication with student and admin roles
+- Protected dashboard, workspace, saved traces, favorites, and admin routes
+- MongoDB persistence for users, saved traces, favorites, and program library
+- Seedable sample program library covering 5 learning categories
+- TraceWise AI analysis endpoints for detect, explain, and final summary
+- Interactive React Flow graph with custom nodes, active glow, visited state, and branch labels
+- Step timeline, autoplay, reset, and node details drawer
+- Learning Mode vs Demo Mode toggle
+- Admin program management and simple usage overview
+- Responsive layouts for desktop, tablet, and mobile
+
+## Tech Stack
+
+- Frontend: React, Vite, Tailwind CSS, React Flow
+- Backend: Node.js, Express.js
+- Database: MongoDB Atlas with Mongoose
+- Auth: JWT + bcryptjs
+- Deployment targets: Vercel for client, Render for server
+
+## Architecture
+
+```text
+logiclens-ai-powered-code-execution-visualizer/
+  client/   React + Vite frontend
+  server/   Express API + MongoDB models + tracing engine
+```
+
+Core engine modules live in `server/engines/` and expose:
+
+- `detectCategory.js`
+- `detectSubtype.js`
+- `extractStatements.js`
+- `normalizeProgram.js`
+- `simulationEngine.js`
+- `explainStep.js`
+- `explainFinalOutput.js`
+- `buildFlowNodes.js`
+- `buildFlowEdges.js`
+- `layoutGraph.js`
+
+## Setup
+
+1. Install dependencies from the repo root:
+
+```bash
+npm install --workspaces
+```
+
+2. Copy environment variables:
+
+```bash
+cp .env.example .env
+cp client/.env.example client/.env
+cp server/.env.example server/.env
+```
+
+3. Fill in your MongoDB Atlas connection string and JWT secret.
+
+4. Seed the sample library and default admin:
+
+```bash
+npm run seed
+```
+
+5. Start the backend:
+
+```bash
+npm run dev:server
+```
+
+6. Start the frontend:
+
+```bash
+npm run dev:client
+```
+
+## Environment Variables
+
+Root / server:
+
+- `MONGO_URI`
+- `JWT_SECRET`
+- `FRONTEND_URL`
+- `PORT`
+- `ADMIN_NAME`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+
+Client:
+
+- `VITE_API_URL`
+
+## API Overview
+
+Auth:
+
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+
+Tracing:
+
+- `POST /api/detect`
+- `POST /api/explain`
+- `POST /api/final-summary`
+
+User traces:
+
+- `POST /api/traces`
+- `GET /api/traces`
+- `GET /api/traces/:id`
+- `DELETE /api/traces/:id`
+
+Favorites:
+
+- `POST /api/favorites`
+- `GET /api/favorites`
+- `DELETE /api/favorites/:id`
+
+Admin:
+
+- `GET /api/admin/programs`
+- `POST /api/admin/programs`
+- `PUT /api/admin/programs/:id`
+- `DELETE /api/admin/programs/:id`
+
+## Deployment
+
+### Frontend on Vercel
+
+- Root directory: `client`
+- Build command: `npm run build`
+- Output directory: `dist`
+- Environment variable: `VITE_API_URL=https://your-render-api.onrender.com`
+
+### Backend on Render
+
+- Root directory: `server`
+- Build command: `npm install`
+- Start command: `npm run start`
+- Environment variables:
+  - `MONGO_URI`
+  - `JWT_SECRET`
+  - `FRONTEND_URL`
+  - `PORT`
+  - `ADMIN_NAME`
+  - `ADMIN_EMAIL`
+  - `ADMIN_PASSWORD`
+
+## Demo Credentials
+
+After seeding, the default admin account is created from environment variables:
+
+- email: `ADMIN_EMAIL`
+- password: `ADMIN_PASSWORD`
+
+Student accounts are created through the signup page.
+
+## Notes
+
+- The tracer is intentionally scoped to beginner-friendly structured Java programs.
+- Unsupported constructs return a support-level response instead of pretending to fully simulate advanced Java.
+- The most polished demo flows are Even/Odd, Greatest of 3 Numbers, Factorial, Sum of n Natural Numbers, Multiplication Table, Prime Number, Palindrome Number, Fibonacci Series, Right Triangle Star Pattern, and Pyramid.
